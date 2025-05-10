@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Ventas agrupadas</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 1rem;
+      background: #f9f9f9;
+    }
+    .venta {
+      background: white;
+      border: 1px solid #ccc;
+      border-radius: 10px;
+      margin-bottom: 1.5rem;
+      padding: 1rem;
+      box-shadow: 0 0 5px rgba(0,0,0,0.05);
+    }
+    .venta h2 {
+      margin: 0 0 0.5rem;
+    }
+    .orden {
+      margin-top: 1rem;
+      padding-left: 1rem;
+    }
+    a {
+      color: #007bff;
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+  <h1>Órdenes agrupadas</h1>
+  <div id="app">Cargando...</div>
+
+  <script>
+    async function loadData() {
+      
+      const app = document.getElementById('app');
+      const res = await fetch('/api');
+      const data = await res.json();
+      app.innerHTML = '';
+
+      Object.values(data).forEach(venta => {
+        const div = document.createElement('div');
+        const divOrden = document.createElement('div');
+        const divEtiqueta = document.createElement('div');
+        const divJoin = document.createElement('div');
+
+        divJoin.style.display='flex'
+        div.style.width='60%'
+        divOrden.style.width='30%'
+
+        divEtiqueta.style.width='10%'
+        divJoin.className = 'venta';
+        
+        div.innerHTML = `
+          <h2>Venta ID: ${venta.ventaid}</h2>
+          <p><strong>Comprador:</strong> ${venta.nickname}</p>
+          <p><strong>Fecha:</strong> ${new Date(venta.date_created).toLocaleString()}</p>
+          <p><strong>Status:</strong> ${venta.shipping.status}</p>
+          <p><strong>Substatus:</strong> ${venta.shipping.substatus}</p>
+          <p><strong>Dirección:</strong> ${venta.shipping.direccion}, ${venta.shipping.localidad}, ${venta.shipping.partido}</p>
+          <p><a href="${venta.shipping.coordenadas}" target="_blank">📍 Ver en Google Maps</a></p>
+          <p><strong>Pago:</strong> $${venta.payments.total_paid_amount} (Recibido: $${venta.payments.net_received_amount})</p>
+          <p><strong>Liberación:</strong> ${venta.payments.money_release_status} (${new Date(venta.payments.money_release_date).toLocaleString()})</p>
+
+          <div class="orden">
+            <strong>Productos:</strong>
+            <ul>
+              ${venta.orden.map(o => `<li>${o.titulo} (x${o.cantidad}) - Color: ${o.color || 'N/A'}</li>`).join('')}
+            </ul>
+          </div>
+        `;
+
+        divOrden.innerHTML=`
+                <p><strong>Envío:</strong> ${venta.shipping.tipoEnvio} </p>
+                <ul>
+                    ${venta.orden.map(o => 
+                    o.color==='Gris Claro' ?
+                    `<div style="margin:2vh; border-radius:6rem;width: 100px; height: 100px; background-color: #ccd1d1; display: flex; justify-content: center; align-items: center; font-size: 5vh">x${o.cantidad}</div>`:
+                    o.color==='Gris oscuro'?
+                    `<div style="margin:2vh; border-radius:6rem;width: 100px; height: 100px; background-color: #515a5a;display: flex; justify-content: center; align-items: center;font-size: 5vh;color: white">x${o.cantidad}</div>`:
+                    o.color==='Beige'?
+                    `<div style="margin:2vh; border-radius:6rem;width: 100px; height: 100px; background-color: #f9e79f;display: flex; justify-content: center; align-items: center;font-size: 5vh">x${o.cantidad}</div>`:
+                    null).join('')}
+                </ul>
+        `
+
+        divJoin.style.backgroundColor = venta.shipping.status==='Entregado' || venta.shipping.status=='Enviado' ?'#e8f6f3':null;
+
+        divEtiqueta.style.backgroundColor = venta.shipping.tipoEnvio==='Flex'&& venta.shipping.status!='Enviado' && venta.shipping.status!='Entregado' ? '#31f312': venta.shipping.tipoEnvio!='Flex'&& venta.shipping.status!='Enviado' && venta.shipping.status!='Entregado' ?'#fe601e':'#e8f6f3'
+
+          //venta.shipping.status!='shipped' && venta.shipping.substatus!='in_hub' && 
+        if (venta.shipping.status!='cancelled'){
+            divJoin.appendChild(div)
+            divJoin.appendChild(divOrden)
+            divJoin.appendChild(divEtiqueta)
+            app.appendChild(divJoin);
+        }
+
+        
+      });
+    }
+
+    loadData();
+
+    //setInterval(loadData, 30000);
+  </script>
+</body>
+</html>
