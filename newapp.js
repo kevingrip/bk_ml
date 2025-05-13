@@ -2,9 +2,13 @@ import axios from 'axios'
 import express from 'express'
 import dotenv from 'dotenv'
 dotenv.config({ path: './.env' })
+import generarEtiqueta from './eti.js'
 
 const access_token = process.env.ML_ACCESS_TOKEN
+const access_tokenAnis = process.env.ML_ACCESS_TOKEN_2
 
+
+const PORT = process.env.PORT
 
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -13,20 +17,29 @@ const __dirname = path.dirname(__filename);
 
 
 const server = express()
+const sellerAnis = 2385461382
+const sellerYo = 1005868067
 
-const url = `https://api.mercadolibre.com/orders/search?seller=1005868067&order.date_created.from=2025-05-01T00:00:00Z`;
+
+const url = `https://api.mercadolibre.com/orders/search?seller=${sellerYo}&order.date_created.from=2025-05-05T00:00:00Z`;
+
+
+// const headers = {
+//     Authorization: `Bearer ${access_token}`,
+//     'Content-Type': 'application/json'
+//   }
 
 const headers = {
-    Authorization: `Bearer ${access_token}`,
-    'Content-Type': 'application/json'
-  }
+Authorization: `Bearer ${access_token}`,
+'Content-Type': 'application/json'
+}
 
 var ventaid;
 
 const traduccionSub = (estado)=>{
     if (estado==='printed'){
         return 'Etiqueta impresa'
-    } else if (estado==='in_hub'){
+    } else if (estado==='in_hub' || estado==='picked_up'){
         return 'Despachado'
     } else if (estado==='ready_to_print'){
         return 'Etiqueta lista para imprimir'
@@ -34,6 +47,8 @@ const traduccionSub = (estado)=>{
         return 'Esperando el retiro'
     }else if (estado==='out_for_delivery'){
         return 'Envio reprogramado'
+    }else if (estado==='in_packing_list'){
+        return 'En camino'
     } else{
         return estado
     }
@@ -51,6 +66,16 @@ const traduccionEstado = (estado)=>{
     }
 }
 
+const tipoEnvio = (env)=>{
+    if (env=== 'xd_drop_off' || env=== 'drop_off'){
+        return 'Punto de despacho'
+    } else if (env=== 'self_service'){
+        return 'Flex'
+    }else{
+        return env
+    }
+}
+
 const urlPay = (id) =>{
     return `https://api.mercadopago.com/v1/payments/${id}`
 }
@@ -62,8 +87,13 @@ const urlShip = (id) =>{
 
 const orders = async() =>{
     try {
-        const response = await axios.get(url,{headers})
-        return response.data;
+        const response1 = await axios.get(url,{headers})
+        //const response2 = await axios.get(url1,{headers1})
+        // const combinedResults = [
+        //     ...response1.data.results,
+        //     ...response2.data.results
+        // ];
+        return response1.data
     } catch (error) {
         throw error
     }
@@ -110,7 +140,7 @@ const app = async() =>{
                         orden:[],
                         shipping: {
                             id: ships.id,
-                            tipoEnvio: ships.logistic_type=== 'xd_drop_off' ? 'Punto de despacho' : 'Flex' || null,
+                            tipoEnvio: tipoEnvio(ships.logistic_type),
                             substatus: traduccionSub(ships.substatus),
                             status: traduccionEstado(ships.status),
                             partido: ships.receiver_address.state.name,
@@ -143,8 +173,8 @@ const app = async() =>{
             
         };
 
-        const filtroNotDelivered = Object.values(agrupado).filter((item)=> item.shipping.status!='delivered')
-        return (agrupado)
+        const filtroNoEnviadas = Object.values(agrupado).filter((item)=> item.shipping.status!='Entregado' && item.shipping.status!='Enviado' && item.shipping.substatus!='Despachado' && item.shipping.substatus!='En camino')
+        return (filtroNoEnviadas)
         //return (agrupado)
         
     } catch (error) {
@@ -152,9 +182,8 @@ const app = async() =>{
     }
 }
 
-const PORT = 3000
-
 server.use(express.static(path.join(__dirname, 'public'))); // sirve index.html desde /public
+server.use(express.json());
 
 
 server.get('/api', async(req,res) =>{
@@ -162,10 +191,22 @@ server.get('/api', async(req,res) =>{
     res.send(data)
 })
 
+server.post('/generar-etiqueta', async (req, res) => {
+    const { shipmentId,userId } = req.body;
+  try {
+    await generarEtiqueta(shipmentId,userId);
+    res.json({ success: true }); // ← Esta línea está bien aquí
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 
 server.listen(PORT,()=>{
     try {
         console.log(`Servidor corriendo en http://localhost:${PORT}/api`)
+        console.log(`Pagina corriendo en http://localhost:${PORT}/`)
     } catch (error) {
         throw error
     }

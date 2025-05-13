@@ -3,33 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <link rel="stylesheet" href="/styles.css">
   <title>Ventas agrupadas</title>
-  <style>
-    body {
-      font-family: sans-serif;
-      padding: 1rem;
-      background: #f9f9f9;
-    }
-    .venta {
-      background: white;
-      border: 1px solid #ccc;
-      border-radius: 10px;
-      margin-bottom: 1.5rem;
-      padding: 1rem;
-      box-shadow: 0 0 5px rgba(0,0,0,0.05);
-    }
-    .venta h2 {
-      margin: 0 0 0.5rem;
-    }
-    .orden {
-      margin-top: 1rem;
-      padding-left: 1rem;
-    }
-    a {
-      color: #007bff;
-      text-decoration: none;
-    }
-  </style>
 </head>
 <body>
   <h1>Órdenes agrupadas</h1>
@@ -50,33 +25,36 @@
         const divJoin = document.createElement('div');
 
         divJoin.style.display='flex'
-        div.style.width='60%'
-        divOrden.style.width='30%'
-
-        divEtiqueta.style.width='10%'
+        div.style.width='70%'
+        divOrden.style.width='25%'
+        div.style.padding='1rem'
+        divOrden.style.padding='1rem'
+        divEtiqueta.style.width='5%'
         divJoin.className = 'venta';
         
         div.innerHTML = `
           <h2>Venta ID: ${venta.ventaid}</h2>
           <p><strong>Comprador:</strong> ${venta.nickname}</p>
           <p><strong>Fecha:</strong> ${new Date(venta.date_created).toLocaleString()}</p>
+          <p><strong>shippingID:</strong> ${venta.shipping.id}</p>
+          <p><strong>Envío:</strong> ${venta.shipping.tipoEnvio} </p>
           <p><strong>Status:</strong> ${venta.shipping.status}</p>
           <p><strong>Substatus:</strong> ${venta.shipping.substatus}</p>
           <p><strong>Dirección:</strong> ${venta.shipping.direccion}, ${venta.shipping.localidad}, ${venta.shipping.partido}</p>
           <p><a href="${venta.shipping.coordenadas}" target="_blank">📍 Ver en Google Maps</a></p>
+          <p><strong>paymentID:</strong> ${venta.payments.mercadopagoID}</p>
           <p><strong>Pago:</strong> $${venta.payments.total_paid_amount} (Recibido: $${venta.payments.net_received_amount})</p>
-          <p><strong>Liberación:</strong> ${venta.payments.money_release_status} (${new Date(venta.payments.money_release_date).toLocaleString()})</p>
+          <p><strong>Liberación:</strong> ${venta.payments.money_release_status}: ${new Date(venta.payments.money_release_date).toLocaleString()}</p>
 
           <div class="orden">
             <strong>Productos:</strong>
             <ul>
-              ${venta.orden.map(o => `<li>${o.titulo} (x${o.cantidad}) - Color: ${o.color || 'N/A'}</li>`).join('')}
+              ${venta.orden.map(o => `<li>${o.titulo} - Color: ${o.color || 'N/A'} x${o.cantidad} </li>`).join('')}
             </ul>
           </div>
         `;
 
         divOrden.innerHTML=`
-                <p><strong>Envío:</strong> ${venta.shipping.tipoEnvio} </p>
                 <ul>
                     ${venta.orden.map(o => 
                     o.color==='Gris Claro' ?
@@ -89,11 +67,49 @@
                 </ul>
         `
 
-        divJoin.style.backgroundColor = venta.shipping.status==='Entregado' || venta.shipping.status=='Enviado' ?'#e8f6f3':null;
+        divJoin.style.backgroundColor = venta.shipping.status==='Entregado' || venta.shipping.status=='Enviado' || venta.shipping.substatus=='Despachado' || venta.shipping.substatus=='En camino' ?'#e8f6f3':null;
+        
+        const button=document.createElement('button')
+        if (venta.shipping.tipoEnvio==='Flex'){
+            if (venta.shipping.substatus==='Etiqueta lista para imprimir'){
+                button.classList.add('boton-flex-imprimir')
+            }else if (venta.shipping.substatus==='Etiqueta impresa'){
+                button.classList.add('boton-flex-impreso')
+            }
+            
+        } else if (venta.shipping.tipoEnvio!='Flex'&& (venta.shipping.substatus==='Etiqueta lista para imprimir' || venta.shipping.substatus==='Etiqueta impresa')){
+            
+            if (venta.shipping.substatus==='Etiqueta lista para imprimir'){
+                button.classList.add('boton-noFlex-imprimir')
+            }else if (venta.shipping.substatus==='Etiqueta impresa'){
+                button.classList.add('boton-noFlex-impreso')
+            }
+        } 
+        else{
+            button.classList.add('boton-otros')
+        } 
+        
+        button.innerHTML='>'
+        divEtiqueta.appendChild(button)
+        
+        button.addEventListener('click', async () => {
+            try {
+                const res = await fetch('/generar-etiqueta', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ shipmentId: venta.shipping.id, userId: venta.nickname })
+                });
 
-        divEtiqueta.style.backgroundColor = venta.shipping.tipoEnvio==='Flex'&& venta.shipping.status!='Enviado' && venta.shipping.status!='Entregado' ? '#31f312': venta.shipping.tipoEnvio!='Flex'&& venta.shipping.status!='Enviado' && venta.shipping.status!='Entregado' ?'#fe601e':'#e8f6f3'
+                const data = await res.json();
+                if (!res.ok) {
+                    alert('Error al generar etiqueta: ' + data.error);
+                }
+            } catch (err) {
+                console.error('Error al generar etiqueta', err);
+            }
+            });
 
-          //venta.shipping.status!='shipped' && venta.shipping.substatus!='in_hub' && 
+          //venta.shipping.status!='shipped' && venta.shipping.substatus!='Despachado' && 
         if (venta.shipping.status!='cancelled'){
             divJoin.appendChild(div)
             divJoin.appendChild(divOrden)
